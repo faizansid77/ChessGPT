@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import "@lichess-org/chessground/assets/chessground.base.css";
+@import "@lichess-org/chessground/assets/chessground.brown.css";
+/* 3-D looking cburnett piece set */
+@import "@lichess-org/chessground/assets/chessground.cburnett.css";
+
+/* Tailwind v4 has a dramatically reduced default colour palette.
+   Rather than relying on colour utilities that may not exist, we
+   hard-code a light / dark background + foreground here. */
+
+body {
+  background: #f9fafb; /* light 50 */
+  color: #171717;      /* near neutral-900 */
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji",
+    "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #0a0a0a; /* dark */
+    color: #ededed;
+  }
+}
