@@ -37,9 +37,11 @@ export default function GamePage() {
   const [chatOverview, setChatOverview] = useState<ChatOverview | null>(null);
   const [currentRecommendation, setCurrentRecommendation] = useState<MoveRecommendation | null>(null);
   const [revealedHintCount, setRevealedHintCount] = useState<number>(0);
-  const [isAwaitingUserMove, setIsAwaitingUserMove] = useState<boolean>(false); // True when user needs to make a move on board
-  const [fenForRecommendation, setFenForRecommendation] = useState<string | null>(null); // FEN of the position for user's move
-  const [userMessage, setUserMessage] = useState<string | null>(null); // Feedback messages for the user in chat UI
+  const [isAwaitingUserMove, setIsAwaitingUserMove] = useState<boolean>(false); 
+  const [fenForRecommendation, setFenForRecommendation] = useState<string | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [userMessage, setUserMessage] = useState<string | null>(null); 
   // chess.js Promotion type, if not already available globally
   type Promotion = 'q' | 'r' | 'b' | 'n';
 
@@ -228,6 +230,46 @@ export default function GamePage() {
     // Keep userInputForChat for now, or clear if preferred: setUserInputForChat('');
   };
 
+  const handleGetAnalysis = async () => {
+    if (!pgn) {
+      setAnalysisError("No PGN data available to analyze.");
+      return;
+    }
+    setIsAnalyzing(true);
+    setAnalysisError(null);
+    setUserMessage(null); // Clear previous messages
+
+    try {
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ pgn: pgn, player_color: 'white' }), // Assuming white for now
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || `API request failed with status ${response.status}`);
+      }
+
+      if (data.advice) {
+        setUserInputForChat(data.advice); // Put the XML advice into the input state
+        handleChatSubmit(); // Process it as if the user pasted it
+      } else if (data.error) {
+        setAnalysisError(`Analysis error: ${data.error}`);
+      } else {
+        setAnalysisError("Received an unexpected response from the analysis API.");
+      }
+    } catch (error) {
+      console.error('Failed to fetch analysis:', error);
+      setAnalysisError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
   // Effect to store the FEN for the current recommendation position
   useEffect(() => {
     if (currentRecommendation && game && currentMoveIndex >= -1) {
@@ -315,6 +357,18 @@ export default function GamePage() {
       {/* Left Half: Chat Box Placeholder - Takes 2/5 width on sm screens and up */}
       <div className="w-full sm:w-2/5 md:w-1/3 sm:sticky sm:top-8 bg-slate-800/50 backdrop-blur-md p-6 rounded-xl shadow-xl border border-slate-700/50 flex flex-col max-h-screen sm:max-h-[calc(100vh-4rem)] mb-6 sm:mb-0">
         <h2 className="text-2xl font-semibold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-500 to-red-500 mb-4">Chat with AI</h2>
+        
+        <div className="mb-4">
+          <button
+            onClick={handleGetAnalysis}
+            disabled={isAnalyzing || !pgn}
+            className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800 disabled:text-slate-400 text-white font-semibold py-2 px-4 rounded-lg text-sm shadow transition-colors duration-150 ease-in-out"
+          >
+            {isAnalyzing ? 'Analyzing PGN...' : 'Get AI Analysis for White'}
+          </button>
+          {analysisError && <p className="text-red-400 text-xs mt-2">Error: {analysisError}</p>}
+        </div>
+
         <div className="flex-grow bg-slate-900/70 rounded-lg p-4 mb-4 overflow-y-auto space-y-3">
           {/* Initial placeholder message - can be removed or conditional */} 
           {!chatOverview && !currentRecommendation && <p className="text-slate-400 text-sm">Chat area for AI recommendations.</p>}
@@ -355,7 +409,8 @@ export default function GamePage() {
           )}
           
           {/* User Feedback Messages */}
-          {userMessage && (
+          {userMessage && !analysisError && ( // Don't show general user messages if there's a specific analysis error
+
             <div className={`p-2 text-xs rounded-md shadow ${userMessage.includes("Congrats") || userMessage.includes("Correct") ? 'bg-green-800/70 text-green-200 ring-1 ring-green-600' : userMessage.includes("Error") || userMessage.includes("Could not") ? 'bg-red-800/70 text-red-200 ring-1 ring-red-600' : 'bg-blue-800/70 text-blue-200 ring-1 ring-blue-600'}`}>
               {userMessage}
             </div>
