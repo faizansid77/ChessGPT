@@ -6,6 +6,7 @@ import chess
 import chess.pgn
 
 PROCESSED_FEN_FILE = "data/processed_study_fens.json"
+CHAPTER_TEXTS_FILE = "data/study_chapter_contents.json"
 
 def convert_fen_to_dotted_pieces(full_fen_string):
     """Converts the piece placement part of a FEN string to use dots for empty squares."""
@@ -53,6 +54,19 @@ def find_closest_fens_naive(query_dotted_fen, all_fens_data, top_n=5):
     
     return distances[:top_n]
 
+def load_chapter_texts(filepath=CHAPTER_TEXTS_FILE):
+    """Loads the chapter text content from the JSON file."""
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        print(f"Successfully loaded {len(data)} chapter text entries from {filepath}")
+        return data
+    except FileNotFoundError:
+        print(f"Error: Chapter texts file '{filepath}' not found.")
+        return None
+    except json.JSONDecodeError:
+        print(f"Error: Could not decode JSON from '{filepath}'.")
+        return None
 
 def get_fens_from_pgn_file(pgn_filepath):
     """Parses a PGN file and returns a list of FENs for each ply of the first game."""
@@ -78,16 +92,21 @@ def get_fens_from_pgn_file(pgn_filepath):
         return None
     return fens
 
-def rank_studies_for_game(user_game_fens_list, all_fens_data, top_n_ply_matches=1):
+def rank_studies_for_game(user_game_fens_list, all_fens_data, chapter_texts_map, top_n_ply_matches=1):
     """
     Ranks studies/chapters based on their relevance to a user's game.
     user_game_fens_list: A list of FEN strings from the user's game.
     all_fens_data: The loaded processed FEN data from studies.
     top_n_ply_matches: How many top matches from the database to consider for each ply of the user's game.
+    chapter_texts_map: A dictionary mapping chapter identifiers to their text content.
     """
     if not all_fens_data or not user_game_fens_list:
-        print("No FEN data provided for ranking studies.")
+        print("No FEN data or user game FENs provided for ranking studies.")
         return []
+    if not chapter_texts_map:
+        print("Chapter texts map not provided. Cannot include chapter content.")
+        # Decide whether to proceed without text or return empty. For now, let's proceed.
+        # return [] 
 
     # Key: (study_id, chapter_title), Value: {'distances': [], 'ply_indices_matched': set()}
     study_chapter_relevance = {}
@@ -128,9 +147,11 @@ def rank_studies_for_game(user_game_fens_list, all_fens_data, top_n_ply_matches=
         ranked_studies.append({
             'study_id': study_id,
             'chapter': chapter_title,
+            'chapter_text_content': chapter_texts_map.get(chapter_title, "Chapter text not found."),
             'average_distance': avg_distance,
             'distinct_ply_matches': num_distinct_ply_matches,
-            'total_close_references': len(data['distances'])
+            'total_close_references': len(data['distances']),
+            'lichess_url': f"https://lichess.org/study/{study_id}"
         })
 
     # Sort: prioritize studies/chapters that match more plies of the user's game,
@@ -175,8 +196,12 @@ def main():
     args = parser.parse_args()
 
     all_fens_data = load_processed_fens(args.file)
+    chapter_texts_map = load_chapter_texts() # Using default path
+
     if not all_fens_data:
+        print("Failed to load FEN data. Exiting.")
         return
+    # chapter_texts_map can be None if file not found, rank_studies_for_game handles it
 
     if args.game_pgn:
         print(f"Starting game analysis for PGN: {args.game_pgn}")
@@ -186,7 +211,7 @@ def main():
             return
         
         start_time = time.time()
-        ranked_study_chapters = rank_studies_for_game(user_game_fens, all_fens_data, top_n_ply_matches=args.top_n_ply_matches)
+        ranked_study_chapters = rank_studies_for_game(user_game_fens, all_fens_data, chapter_texts_map, top_n_ply_matches=args.top_n_ply_matches)
         end_time = time.time()
 
         print(f"\nGame analysis completed in {end_time - start_time:.4f} seconds.")
@@ -197,6 +222,8 @@ def main():
                 print(f"     Avg Distance: {entry['average_distance']:.2f}")
                 print(f"     Distinct Plies Matched: {entry['distinct_ply_matches']}/{len(user_game_fens)}")
                 # print(f"     Total Close References: {entry['total_close_references']}") # More verbose
+                text_preview = entry.get('chapter_text_content', '')[:100] + ('...' if len(entry.get('chapter_text_content', '')) > 100 else '')
+                print(f"     Text Preview: {text_preview}")
                 print("     -----")
         else:
             print("No relevant study chapters found for the provided game.")
