@@ -1,60 +1,74 @@
 // components/MoveList.tsx
-
 'use client';
 
 import React, { useEffect, useRef } from 'react';
 
-interface MoveListProps {
-  moves: string[];
+// Define the structure of a move object, similar to chess.js verbose history
+interface Move {
+  san: string;
+  color: 'w' | 'b';
+  // Add other fields from chess.js verbose history if needed for display or logic
 }
 
-const MoveList: React.FC<MoveListProps> = ({ moves }) => {
-  const scrollRef = useRef<HTMLDivElement>(null);
+interface MoveListProps {
+  moves: Move[];
+  currentMoveIndex: number;
+  onNavigate: (index: number) => void;
+}
 
-  // Scroll to bottom when moves change
+const MoveList: React.FC<MoveListProps> = ({ moves, currentMoveIndex, onNavigate }) => {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const moveItemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  // Adjust the size of the refs array when the moves array changes
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    moveItemRefs.current = moveItemRefs.current.slice(0, moves.length);
   }, [moves]);
 
-  const groupedMoves = [];
-  for (let i = 0; i < moves.length; i += 2) {
-    groupedMoves.push({
-      moveNumber: Math.floor(i / 2) + 1,
-      white: moves[i],
-      black: moves[i + 1] || '',
-    });
-  }
+  // Scroll the current move into view
+  useEffect(() => {
+    if (currentMoveIndex >= 0 && currentMoveIndex < moves.length && moveItemRefs.current[currentMoveIndex]) {
+      moveItemRefs.current[currentMoveIndex]?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+      });
+    }
+  }, [currentMoveIndex, moves]);
 
   return (
-    <div className="w-full max-w-md bg-white rounded-lg shadow-md p-4">
-      <h2 className="text-lg font-bold mb-2">Move List</h2>
-      <div ref={scrollRef} className="overflow-y-auto max-h-64">
-        {groupedMoves.length === 0 ? (
-          <p className="text-gray-500 text-sm">No moves yet...</p>
+    <div className="w-full bg-white/5 p-4 md:p-6 rounded-lg shadow-xl max-h-72 flex flex-col">
+      <h2 className="text-xl md:text-2xl font-semibold mb-4 border-b border-gray-700 pb-2 text-white flex-shrink-0">
+        Move List
+      </h2>
+      <div ref={scrollContainerRef} className="overflow-y-auto flex-grow pr-1 space-y-1">
+        {moves.length === 0 ? (
+          <p className="text-gray-400 text-sm md:text-base italic p-2">No moves in PGN.</p>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr>
-                <th className="text-left">#</th>
-                <th className="text-left">White</th>
-                <th className="text-left">Black</th>
-              </tr>
-            </thead>
-            <tbody>
-              {groupedMoves.map(({ moveNumber, white, black }, index) => (
-                <tr
-                  key={moveNumber}
-                  className={index === groupedMoves.length - 1 ? 'bg-yellow-100' : ''}
-                >
-                  <td className="pr-2">{moveNumber}</td>
-                  <td className="pr-2">{white}</td>
-                  <td>{black}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          moves.map((move, index) => {
+            const moveNumberDisplay = Math.floor(index / 2) + 1;
+            const isWhiteMove = move.color === 'w';
+
+            return (
+              <button
+                key={index}
+                ref={el => { moveItemRefs.current[index] = el; }}
+                onClick={() => onNavigate(index)}
+                className={`block w-full text-left p-2 rounded transition-colors duration-150 text-sm md:text-base 
+                            ${index === currentMoveIndex 
+                              ? 'bg-purple-600 text-white font-semibold' 
+                              : 'text-gray-300 hover:bg-gray-700/70 hover:text-white'
+                            }`}
+                title={`Go to move: ${moveNumberDisplay}. ${isWhiteMove ? '' : '...'}${move.san}`}
+              >
+                <span className="font-mono text-xs mr-2 text-gray-400 w-7 inline-block text-right">
+                  {isWhiteMove ? `${moveNumberDisplay}.` : ''}
+                </span>
+                <span className={`${!isWhiteMove && index !== currentMoveIndex ? 'ml-[0.8rem]' : ''} ${!isWhiteMove && index === currentMoveIndex ? 'ml-[0.8rem]' : ''}`}>
+                  {isWhiteMove ? '' : '...'}{move.san}
+                </span>
+              </button>
+            );
+          })
         )}
       </div>
     </div>
