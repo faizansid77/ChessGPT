@@ -40,6 +40,8 @@ export default function GamePage() {
   const [isAwaitingUserMove, setIsAwaitingUserMove] = useState<boolean>(false); // True when user needs to make a move on board
   const [fenForRecommendation, setFenForRecommendation] = useState<string | null>(null); // FEN of the position for user's move
   const [userMessage, setUserMessage] = useState<string | null>(null); // Feedback messages for the user in chat UI
+  // chess.js Promotion type, if not already available globally
+  type Promotion = 'q' | 'r' | 'b' | 'n';
 
   useEffect(() => {
     const storedPgn = localStorage.getItem('pgnData');
@@ -216,6 +218,7 @@ export default function GamePage() {
       // navigateToMove expects a 0-indexed ply. So, for ply K, we pass K-1.
       // This sets the board to the state *after* the (K-1)th 0-indexed ply.
       // This is the position where the user is expected to make the *next* move.
+      console.log(`[GamePage] Parsed ply: ${parsedRecommendation.ply}, navigating to index: ${parsedRecommendation.ply - 1}`);
       navigateToMove(parsedRecommendation.ply - 1);
       
     } else {
@@ -234,19 +237,66 @@ export default function GamePage() {
   }, [currentMoveIndex, currentRecommendation, game, pgn]); // Added pgn to ensure currentFen() is stable after game load
 
   // Placeholder for handling user's move from ChessBoard (Phase 2)
-  const handleUserMadeMoveOnBoard = (move: { from: string, to: string, promotion?: string }) => {
-    if (!isAwaitingUserMove || !currentRecommendation || !fenForRecommendation || !game) return;
+  const handleUserMadeMoveOnBoard = (userMove: { from: string, to: string, promotion?: string }) => {
+    if (!isAwaitingUserMove || !currentRecommendation || !fenForRecommendation || !game) {
+      console.warn("handleUserMadeMoveOnBoard called unexpectedly or with missing state.");
+      return;
+    }
 
-    // Phase 2 logic will go here:
-    // 1. Create a new Chess instance with fenForRecommendation.
-    // 2. Try to make the user's move on this instance.
-    // 3. If legal, get SAN. Compare with currentRecommendation.topMoves.
-    // 4. Provide feedback (congrats or try again).
-    // 5. If congrats & more recommendations: proceed. Else if try again: reset board to fenForRecommendation.
-    // 6. setIsAwaitingUserMove(false);
-    console.log("User attempted move:", move, "Expected top moves:", currentRecommendation.topMoves);
-    setUserMessage("Move received! (Feedback logic pending Phase 2)");
-    setIsAwaitingUserMove(false); // Temporarily disable after one attempt for now
+    const boardStateForValidation = new Chess(fenForRecommendation);
+    const moveAttempt = {
+      from: userMove.from,
+      to: userMove.to,
+      promotion: userMove.promotion as Promotion | undefined, // Cast to chess.js Promotion type
+    };
+
+    const moveResult = boardStateForValidation.move(moveAttempt);
+
+    if (moveResult === null) {
+      setUserMessage(`Invalid move (${userMove.from}-${userMove.to}). Please try again from this position.`);
+      // Board remains at fenForRecommendation, user can try again.
+      // isAwaitingUserMove remains true to allow another attempt.
+      return; 
+    }
+
+    const sanMove = moveResult.san;
+    if (currentRecommendation.topMoves.includes(sanMove)) {
+      setUserMessage(`Congratulations! "${sanMove}" is a great move!`);
+      setIsAwaitingUserMove(false);
+
+      // Apply the successful move to the main game instance
+      const mainGameMoveResult = game.move(sanMove); 
+      if (mainGameMoveResult) {
+        // Update currentMoveIndex to reflect the new state of the game
+        // This relies on gameHistory being up-to-date *before* this point, or recalculating based on game.history()
+        // A robust way is to find the ply that matches the new game.fen()
+        // For simplicity now, if game.history() is used by MoveList, it will update.
+        // We need to ensure currentMoveIndex correctly points to this new move.
+        setCurrentMoveIndex(currentMoveIndex + 1); // This advances the game to the user's move
+        
+        // Optionally, clear current recommendation as it's fulfilled
+        // setCurrentRecommendation(null);
+        // setChatOverview(null);
+      } else {
+        // This should ideally not happen if move was valid on fenForRecommendation
+        console.error("Error applying validated move to main game instance.");
+        setUserMessage("An error occurred applying your move. The board is reset.");
+        // Reset board to the recommendation FEN by not changing currentMoveIndex from recommendation point
+        // Or, more explicitly, navigate back if currentMoveIndex was already changed optimistically
+        navigateToMove(currentRecommendation.ply -1); // Re-sync to recommendation point
+      }
+    } else {
+      setUserMessage(`"${sanMove}" is a legal move, but not among the top recommendations (${currentRecommendation.topMoves.join(', ')}). Try to find a stronger one! Board reset.`);
+      // Board remains at fenForRecommendation, user can try again.
+      // isAwaitingUserMove remains true to allow another attempt (or set to false then true to re-trigger board interactivity if needed)
+      // No change to main game state, so board implicitly resets to fenForRecommendation on next render if ChessBoard relies on main fen prop.
+      // To be absolutely sure, we could re-set the FEN prop of ChessBoard if it were managed separately, 
+      // but since it uses currentFen() which depends on currentMoveIndex, and currentMoveIndex is NOT advanced here,
+      // the board should show fenForRecommendation.
+    }
+    // If not a top move, isAwaitingUserMove can remain true. If it was a top move, it's set to false.
+    // If we want only one attempt per "Make Your Move" click for non-top moves:
+    // if (!currentRecommendation.topMoves.includes(sanMove)) { setIsAwaitingUserMove(false); }
   };
 
   // Conditional return for loading state - must be after all hook calls.
@@ -293,9 +343,6 @@ export default function GamePage() {
                   Show Hint ({revealedHintCount + 1}/{currentRecommendation.hints.length})
                 </button>
               )}
-              <div className="mt-2">
-                <p className="text-2xs text-slate-500">Expected top moves: {currentRecommendation.topMoves.join(', ')}</p>
-              </div>
               <button 
                 onClick={() => {
                   setIsAwaitingUserMove(true);
@@ -367,7 +414,14 @@ export default function GamePage() {
           {/* Chessboard container - ChessBoard.tsx itself has a rounded-xl shadow-2xl wrapper */}
           {/* We apply the frosted glass to its parent here for consistency if ChessBoard's own wrapper is changed/removed */}
           <div className="md:col-span-2 bg-slate-700/30 backdrop-blur-lg p-4 md:p-6 rounded-xl shadow-2xl border border-slate-600/50 flex items-center justify-center">
-            <ChessBoard fen={currentFen()} orientation="white" />
+            <ChessBoard 
+              key={isAwaitingUserMove ? 'interactive-board' : 'view-only-board'} // Force re-mount on mode change
+              fen={isAwaitingUserMove && fenForRecommendation ? fenForRecommendation : currentFen()} 
+              orientation="white" // Assuming white's perspective for now, can be dynamic
+              allowUserMoves={isAwaitingUserMove}
+              playerColor="white" // Hardcoded to white for now, as user makes move for white
+              onUserMadeMove={handleUserMadeMoveOnBoard}
+            />
           </div>
 
           {/* MoveList container */}
