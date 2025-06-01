@@ -1,0 +1,8 @@
+requests
+beautifulsoup4
+python-chess
+tqdm
+# For Levenshtein distance, if we use the C implementation later:
+python-Levenshtein
+pytest
+pytest-mock
