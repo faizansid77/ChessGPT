@@ -10,8 +10,8 @@
         *   Annotated master games.
         *   Chess principles and heuristics.
     *   Determine data formats (PGN, FEN, plain text, structured data).
-    *   Develop/utilize scraping tools (Python libraries like `requests`, `BeautifulSoup`, or specialized chess libraries).
-    *   Organize scraped data into a processable format (e.g., text files, JSON, CSV).
+    *   Develop/utilize scraping tools (Python libraries like `requests`, `BeautifulSoup`, or specialized chess libraries). **[DONE for Lichess studies - `lichess_scraper.py`]**
+    *   Organize scraped data into a processable format (e.g., text files, JSON, CSV). **[DONE - `data/lichess_studies_2.json`]**
     *   *Consideration:* How to chunk large pieces of information for effective embedding.
 
 2.  **Set Up and Learn Voyage AI:**
@@ -25,11 +25,11 @@
 
 3.  **Process and Embed Chess Knowledge into Voyage AI:**
     *   Write Python scripts to:
-        *   Load the scraped chess knowledge.
-        *   Preprocess text (clean, structure, chunk if necessary).
+        *   Load the scraped chess knowledge. **[DONE - `fen_processor.py` loads `data/lichess_studies_2.json`]**
+        *   Preprocess text (clean, structure, chunk if necessary). **[DONE - `fen_processor.py` processes PGNs to FENs, stores in `data/processed_study_fens.json`]**
         *   Use the Voyage AI client to generate embeddings for each piece of knowledge.
     *   **Store Embeddings and Corresponding Text:**
-        *   *Initial:* Store embeddings and their original text locally (e.g., in NumPy arrays/lists and a corresponding list of texts, or simple files).
+        *   *Initial:* Store embeddings and their original text locally (e.g., in NumPy arrays/lists and a corresponding list of texts, or simple files). **[IN PROGRESS - Storing processed FENs and original FENs in `data/processed_study_fens.json` is a step towards this. `fen_retriever.py` uses this.]**
         *   *Scalable:* Evaluate and implement a vector database (e.g., FAISS, ChromaDB, Pinecone, Weaviate) if the knowledge base becomes large, for efficient similarity search. This will store the embeddings and allow quick lookups.
 
 ## Phase 2: Core Tutoring Logic
@@ -47,7 +47,8 @@
             *   Formulate a query string based on the position (e.g., FEN, key pieces, pawn structure, tactical motifs present).
             *   Embed the query using Voyage AI (`input_type="query"`).
             *   Perform a similarity search against your stored chess knowledge embeddings.
-            *   Retrieve the top N most relevant knowledge snippets.
+            *   Retrieve the top N most relevant knowledge snippets. **[IN PROGRESS - Naive FEN retrieval implemented in `fen_retriever.py` using Levenshtein distance on dotted FENs, not yet using Voyage AI embeddings]**
+
 
 5.  **LLM-Powered Advice Generation:**
     *   **Input:**
@@ -85,7 +86,7 @@
         *   Endpoints should return structured data (JSON) containing analysis, advice, and exercises.
 
 8.  **Testing and Refinement:**
-    *   Unit tests for individual components (Stockfish interaction, Voyage AI querying, LLM prompt formatting).
+    *   Unit tests for individual components (Stockfish interaction, Voyage AI querying, LLM prompt formatting). **[IN PROGRESS - Tests for `fen_processor.py` and `fen_retriever.py` are DONE. Tests for `lichess_scraper.py` were started but then removed per user request.]**
     *   Integration tests for the entire pipeline.
     *   Iteratively refine prompts and logic based on output quality.
 

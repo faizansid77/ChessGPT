@@ -1,0 +1,20 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# Data files (can be regenerated)
+data/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Environment files (if you use venv or similar)
+# .venv/
+# venv/
+# env/
+# ENV/
+
+# IDE specific files
+.idea/
+.vscode/
